@@ -9,3 +9,179 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+#### Lab 5 objecttives
+
+- learn to parse dates with 'lubridate'
+- gets counts of obersvations with count()
+- uncount() rows with uncount
+- 1 and 2 sample t test
+- create a heat map with geom_tile()
+
+```{r, include = FALSE}
+
+# Read in data and attach packages
+library(tidyverse)
+library(here)
+library(janitor)
+
+lobster_abundance <- read_csv(here("data", "lobster_abundance.csv"), 
+                              na = "-99999") %>% 
+  clean_names()
+
+```
+
+
+Use the tidyr uncount() function to convert our loberster data from frequency format to case format
+
+```{r}
+
+lobster_tidy <- lobster_abundance %>% 
+  uncount(lobster_count)
+```
+
+
+##### Exploratory data visulation
+
+We are only going to consider "site" as out variable of interest
+
+```{r}
+
+
+ggplot(lobster_tidy, aes(x = site, y = size_mm)) +
+  geom_jitter(aes(color = site),
+              alpha = 0.5,
+              width = 0.2)
+
+# Histogram
+
+ggplot(lobster_tidy, aes(x = size_mm)) +
+  geom_histogram(aes(fill = site)) +
+  facet_wrap(~site, scales = "free")
+
+ggplot(lobster_tidy, aes(sample = size_mm)) +
+  geom_qq() +
+  facet_wrap(~site)
+```
+
+
+#### Convert the 'date' colu,m to class 'data'
+
+Use lubridate package to convert to date format and then to help us easily parse month & year
+
+```{r}
+
+lobster_date <- lobster_tidy %>% 
+  mutate(
+    date_new = lubridate::mdy(date)
+  )
+```
+
+
+Now let's parse year and month using lubriate:: month() and lubridate:: year()
+
+```{r}
+
+lobster_parse_date <- lobster_date %>% 
+  mutate(
+    obs_month = lubridate::month(date_new, label = TRUE),
+    obs_year = lubridate::year(date_new)
+  )
+```
+
+Now lets find counts of observed lobsters based on different hierarchical groupings:
+
+Frist lets count lobsters by year and month
+```{r}
+
+lobster_ym <- lobster_parse_date %>% 
+  count(obs_year, obs_month)
+
+lobster_y <- lobster_parse_date %>% 
+  count(obs_year)
+
+lobster_site <- lobster_parse_date %>% 
+  count(site)
+
+```
+
+If we want to create a cummery table that caontains statistics other than counts by groups, it's easier to use group_by() + n()
+
+```{r}
+
+lobster_summary <- lobster_parse_date %>% 
+  group_by(site) %>% 
+  summarize(
+    mean_size = mean(size_mm, na.rm = TRUE),
+    sd_size = sd(size_mm, na.rm = TRUE),
+    lobster_number = n()
+  )
+
+```
+
+
+#### Find confidence intervals
+
+Use t.test() function to find confidence intervals (for one smaple) and perform t-teshs to compare means of two samples
+
+```{r}
+
+ivee_lobster <- lobster_tidy %>% 
+  filter(site == "IVEE") %>% 
+  pull(size_mm)
+
+t.test(ivee_lobster)
+```
+
+
+#### Two Sample T-Test to Compare Means
+
+Is there a signfigant difference n lobster length at Naples and Mohawk reefs?
+
+```{r}
+
+napl_sample <- lobster_tidy %>% 
+  filter(site == "NAPL") %>% 
+  pull(size_mm)
+
+mohk_sample <- lobster_tidy %>% 
+  filter(site == "MOHK") %>% 
+  pull(size_mm)
+
+mn_ttest <- t.test(mohk_sample, napl_sample)
+mn_ttest
+```
+
+There is a signifigant different in lobster lengths between Naples and Nohawk Reef. (t(df) = statstic, p , .001, alpha = .05)
+
+
+```{r}
+
+lobster_mn <- lobster_tidy %>% 
+  filter(site %in% c("NAPL", "MOHK"))
+
+mn_ttest2 <- t.test(size_mm ~ site, na.rm = TRUE, data = lobster_mn)
+mn_ttest2
+
+mn_ttest2$p.value
+mn_ttest2$statistic
+```
+
+THIS IS CALLED IN LINE REFERANCING - GOOD TOOL TO AUTO- UPDATE FROM CODE
+
+Here is the t-statistic: `r mn_ttest2$p.value`
+
+Here is the t-statistic: `r mn_ttest2$statistic`
+
+
+#### Now a Heat Map
+
+```{r}
+
+lobster_ys <- lobster_parse_date %>% 
+  count(obs_year, site)
+
+ggplot(data = lobster_ys, aes(x = obs_year, y = site)) +
+  geom_tile(aes(fill = n))
+```
+
